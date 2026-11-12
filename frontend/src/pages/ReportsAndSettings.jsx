@@ -103,6 +103,15 @@ export default function ReportsAndSettings({ user, onDataDeleted }) {
     }
   };
 
+  const handleDeleteBill = async (billId) => {
+    try {
+      await api.deleteBill(billId);
+      await loadBills();
+    } catch (e) {
+      setMessage('Error deleting bill: ' + e.message);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
       {/* Radiant Gradient Emerald Header */}
@@ -206,14 +215,25 @@ export default function ReportsAndSettings({ user, onDataDeleted }) {
                       </td>
                       <td className="py-3 px-3 font-bold text-white">₹{b.net_payable}</td>
                       <td className="py-3 px-3">
-                        <button
-                          type="button"
-                          onClick={() => (editingBillId === b.id ? handleCancelEdit() : handleEditBill(b))}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-700/50 text-emerald-200 text-xs font-semibold transition"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          <span>{editingBillId === b.id ? 'Close' : 'Edit'}</span>
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => (editingBillId === b.id ? handleCancelEdit() : handleEditBill(b))}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-700/50 text-emerald-200 text-xs font-semibold transition"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            <span>{editingBillId === b.id ? 'Close' : 'Edit'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBill(b.id)}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 border border-rose-800/60 text-rose-300 text-xs font-semibold transition"
+                            title="Delete bill"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     {editingBillId === b.id && (

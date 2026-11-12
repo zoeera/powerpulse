@@ -1,6 +1,16 @@
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
 const BACKEND_ORIGIN = API_BASE.replace(/\/api\/v1$/, '');
 
+function getOrCreateGuestToken() {
+  let guestId = localStorage.getItem('powerpulse_guest_id');
+  if (!guestId) {
+    const rand = Math.random().toString(36).slice(2, 12) + Date.now().toString(36).slice(-6);
+    guestId = `guest_${rand}`.slice(0, 32);
+    localStorage.setItem('powerpulse_guest_id', guestId);
+  }
+  return guestId;
+}
+
 class ApiClient {
   constructor() {
     this.token = localStorage.getItem('powerpulse_token') || null;
@@ -27,7 +37,7 @@ class ApiClient {
     const url = `${API_BASE}${endpoint}`;
     const headers = { ...(options.headers || {}) };
 
-    const activeToken = this.token || 'demo_token';
+    const activeToken = this.token || getOrCreateGuestToken();
     if (!headers['Authorization']) {
       headers['Authorization'] = `Bearer ${activeToken}`;
     }
@@ -109,6 +119,7 @@ class ApiClient {
   async deleteMyData() {
     const res = await this.request('/users/me', { method: 'DELETE' });
     this.setToken(null);
+    localStorage.removeItem('powerpulse_guest_id');
     return res;
   }
 
@@ -146,6 +157,12 @@ class ApiClient {
     return this.request(`/bills/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updateData),
+    });
+  }
+
+  async deleteBill(id) {
+    return this.request(`/bills/${id}`, {
+      method: 'DELETE',
     });
   }
 

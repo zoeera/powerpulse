@@ -1,3 +1,4 @@
+import hashlib
 import json
 from typing import List, Optional
 from datetime import date
@@ -37,10 +38,14 @@ async def upload_bill(
             detail="File size exceeds maximum allowed 10 MB limit (FR-02)"
         )
 
-    file_hash = compute_file_hash(contents)
+    raw_hash = compute_file_hash(contents)
+    file_hash = hashlib.sha256(f"{current_user.id}:{raw_hash}".encode("utf-8")).hexdigest()
     
-    # Check deduplication: bills.source_file_hash UNIQUE
-    existing_bill = db.query(Bill).filter(Bill.source_file_hash == file_hash).first()
+    # Check per-user deduplication: bills.source_file_hash UNIQUE
+    existing_bill = db.query(Bill).filter(
+        Bill.user_id == current_user.id,
+        Bill.source_file_hash == file_hash
+    ).first()
     if existing_bill and existing_bill.energy_charges > 0:
         # If bill was already parsed with valid positive charges, return existing record
         signed_url = generate_signed_url(existing_bill.source_file_path) if existing_bill.source_file_path else None
@@ -230,4 +235,18 @@ def update_bill(
     if bill.source_file_path:
         resp.signed_url = generate_signed_url(bill.source_file_path)
     return resp
+
+
+@router.delete("/{bill_id}")
+def delete_bill(
+    bill_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    bill = db.query(Bill).filter(Bill.id == bill_id, Bill.user_id == current_user.id).first()
+    if not bill:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
+    db.delete(bill)
+    db.commit()
+    return {"status": "SUCCESS", "deleted_bill_id": bill_id}
 

@@ -38,11 +38,43 @@ def get_or_create_default_user(db: Session) -> User:
             user = db.query(User).filter(User.email == "consumer@powerpulse.in").first()
     return user
 
+def get_or_create_guest_user(db: Session, guest_key: str) -> User:
+    """Return an isolated per-browser guest profile so visitors never see old/shared test bills."""
+    safe_id = "".join(c for c in guest_key if c.isalnum() or c in ("_", "-"))[:36] or "guest_default"
+    guest_email = f"{safe_id}@guest.powerpulse.in"
+    user = db.query(User).filter(User.id == safe_id, User.deleted_at.is_(None)).first()
+    if not user:
+        user = db.query(User).filter(User.email == guest_email, User.deleted_at.is_(None)).first()
+    if not user:
+        user = User(
+            id=safe_id,
+            email=guest_email,
+            hashed_password=get_password_hash("PowerPulse123!"),
+            full_name="Consumer",
+            state="Telangana",
+            city="Hyderabad",
+            utility="TGSPDCL",
+            tariff_category="LT-I(A)",
+        )
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            user = db.query(User).filter(User.id == safe_id).first()
+    return user
+
+
 def get_current_user(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
     db: Session = Depends(get_db)
 ) -> User:
     if auth and auth.credentials and auth.credentials not in ("null", "undefined", "demo_token"):
+        if auth.credentials.startswith("guest_"):
+            guest_user = get_or_create_guest_user(db, auth.credentials)
+            if guest_user:
+                return guest_user
         payload = decode_access_token(auth.credentials)
         if payload and payload.get("sub"):
             user_id: str = payload.get("sub")
@@ -50,7 +82,7 @@ def get_current_user(
             if user:
                 return user
 
-    # Fallback to default demo user for seamless local testing without 401 errors
+    # Fallback to default demo user for legacy clients
     default_user = get_or_create_default_user(db)
     if default_user:
         return default_user

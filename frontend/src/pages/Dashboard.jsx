@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Zap, IndianRupee, Sun, TrendingUp, UploadCloud, ChevronRight,
-  Cpu, FileText, LineChart, Receipt, CheckCircle2, Info
+  Cpu, FileText, LineChart, Receipt, CheckCircle2, Info, Trash2
 } from 'lucide-react';
 import {
   ResponsiveContainer, LineChart as ReLineChart, Line, XAxis, YAxis,
@@ -52,6 +52,15 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
     try {
       await api.resolveSpike(spikeId);
       setSpikes(spikes.filter(s => s.id !== spikeId));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteBill = async (billId) => {
+    try {
+      await api.deleteBill(billId);
+      await loadDashboardData();
     } catch (e) {
       console.error(e);
     }
@@ -168,9 +177,20 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
                     <div className="text-sm font-bold text-yellow-300 mt-1">
                       Paid: ₹{(Number(lb.net_payable) || 0).toLocaleString('en-IN')}
                     </div>
-                    <p className="text-xs text-emerald-300/70 mt-2">
-                      {lb.provider || user?.utility} • {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mt-2">
+                      <p className="text-xs text-emerald-300/70">
+                        {lb.provider || user?.utility} • {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBill(lb.id)}
+                        className="text-[11px] font-bold text-rose-400 hover:text-rose-300 inline-flex items-center space-x-1 transition"
+                        title="Remove this bill"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -244,7 +264,7 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
                   <ReLineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#0a2a22" />
                     <XAxis dataKey="name" stroke="#6ee7b7" fontSize={12} tickLine={false} />
-                    <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} unit=" Units" />
+                    <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} width={56} />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#071713', borderRadius: '12px', border: '1px solid #10b981', color: '#ffffff' }}
                       formatter={(val, name) => [`${val} Units`, name]}
