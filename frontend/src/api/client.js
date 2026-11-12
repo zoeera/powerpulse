@@ -23,7 +23,7 @@ class ApiClient {
     }
   }
 
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, retriesLeft = 1) {
     const url = `${API_BASE}${endpoint}`;
     const headers = options.headers || {};
 
@@ -36,7 +36,21 @@ class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(url, { ...options, headers });
+    let response;
+    try {
+      response = await fetch(url, { ...options, headers });
+    } catch (err) {
+      if (retriesLeft > 0) {
+        await new Promise((r) => setTimeout(r, 3000));
+        return this.request(endpoint, options, retriesLeft - 1);
+      }
+      throw new Error('Server is waking up or temporarily unreachable. Please wait 15–30 seconds and try again.');
+    }
+
+    if ((response.status === 502 || response.status === 503) && retriesLeft > 0) {
+      await new Promise((r) => setTimeout(r, 3000));
+      return this.request(endpoint, options, retriesLeft - 1);
+    }
 
     if (response.status === 401 && this.token) {
       this.setToken(null);
@@ -45,6 +59,9 @@ class ApiClient {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 502 || response.status === 503) {
+        throw new Error('Server is waking up from sleep. Please wait 20–30 seconds and try again.');
+      }
       throw new Error(data.detail || data.message || `API error: ${response.status}`);
     }
 
