@@ -95,14 +95,14 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
           <div className="space-y-1.5">
             <span className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-yellow-300">
               <Zap className="w-3.5 h-3.5" />
-              <span>About PowerPulse India</span>
+              <span>Welcome to PowerPulse India</span>
             </span>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Smart Electricity Bill Reader &amp; ML Predictor
+              Your Smart Home Electricity Helper
             </h1>
             <p className="text-sm text-emerald-50/90 max-w-3xl leading-relaxed">
-              PowerPulse helps you understand your electricity bill, check government subsidies, track high-cost home appliances,
-              predict your upcoming monthly bills using trained machine learning models, and estimate rooftop solar savings.
+              PowerPulse makes it easy to read your electricity bill, check if you qualify for free government power,
+              see which home appliances cost you the most, estimate your upcoming bills, and find out how much you can save with rooftop solar.
             </p>
           </div>
         </div>
@@ -111,26 +111,26 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
           <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
             <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
-              Step 1 • Upload Your Bill
+              Step 1 • Add Your Bill
             </div>
             <p className="text-xs text-emerald-50/85 leading-relaxed">
-              Upload a bill photo/PDF or enter details manually right below.
+              Take a photo or upload a PDF of your bill below, or type the details by hand.
             </p>
           </div>
           <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
             <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
-              Step 2 • View Model Predictions
+              Step 2 • See Upcoming Bills
             </div>
             <p className="text-xs text-emerald-50/85 leading-relaxed">
-              Right after saving, the ML model predicts your next 3 months of units and tariff cost.
+              Right after saving, see what your next 3 electricity bills are likely to be.
             </p>
           </div>
           <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
             <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
-              Step 3 • Explore Tools &amp; PDF
+              Step 3 • Save Money
             </div>
             <p className="text-xs text-emerald-50/85 leading-relaxed">
-              Use the top menu to check Appliances, Future Bills, Solar &amp; Savings, or download a PDF report.
+              Check Appliance costs, Solar Savings, or download a clean PDF summary from the menu above.
             </p>
           </div>
         </div>
@@ -176,23 +176,22 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
               );
             })()}
 
-            {/* Next Month ML Model Prediction */}
+            {/* Next Month Bill Prediction */}
             {hasModelForecast && (
               <div className="card-emerald p-5 flex flex-col justify-between">
                 <div className="flex justify-between items-start">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">ML Model Next Month</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Expected Next Month</span>
                   <TrendingUp className="w-4 h-4 text-yellow-400" />
                 </div>
                 <div className="mt-3">
                   <div className="text-3xl font-black text-white">
-                    {Number(forecast.predicted_kwh || 0).toFixed(1)} <span className="text-sm font-normal text-emerald-300/80">kWh</span>
+                    {Number(forecast.predicted_kwh || 0).toFixed(1)} <span className="text-sm font-normal text-emerald-300/80">Units</span>
                   </div>
                   <div className="text-sm font-bold text-yellow-300 mt-1">
                     Estimated Bill: ₹{Math.round(Number(forecast.estimated_cost_inr) || 0).toLocaleString('en-IN')}
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <ConfidenceBadge tier={forecast.confidence_tier} />
-                    <span className="text-[11px] text-emerald-300/70">{forecast.model_used}</span>
                   </div>
                 </div>
               </div>
@@ -223,13 +222,13 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
             </div>
           </div>
 
-          {/* Usage & Model Forecast Chart (real bills only) */}
+          {/* Usage & Forecast Chart (real bills only) */}
           {chartData.length > 0 && (
             <div className="card-emerald p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                 <div>
-                  <h2 className="text-base font-bold text-white">Saved Bills &amp; Model Forecast</h2>
-                  <p className="text-xs text-emerald-300/70">Actual recorded units vs. ML model predictions</p>
+                  <h2 className="text-base font-bold text-white">Your Past Bills &amp; Upcoming Forecast</h2>
+                  <p className="text-xs text-emerald-300/70">Units used in your saved bills compared to expected upcoming months</p>
                 </div>
                 <button
                   type="button"
@@ -245,10 +244,10 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
                   <ReLineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#0a2a22" />
                     <XAxis dataKey="name" stroke="#6ee7b7" fontSize={12} tickLine={false} />
-                    <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} unit=" kWh" />
+                    <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} unit=" Units" />
                     <Tooltip
                       contentStyle={{ backgroundColor: '#071713', borderRadius: '12px', border: '1px solid #10b981', color: '#ffffff' }}
-                      formatter={(val, name) => [`${val} kWh`, name]}
+                      formatter={(val, name) => [`${val} Units`, name]}
                     />
                     <Legend />
                     <Line
@@ -257,7 +256,7 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
                       stroke="#10b981"
                       strokeWidth={3}
                       dot={{ r: 5, fill: '#10b981' }}
-                      name="Saved Bills (kWh)"
+                      name="Your Saved Bills"
                     />
                     <Line
                       type="monotone"
@@ -266,7 +265,7 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
                       strokeWidth={3}
                       strokeDasharray="5 5"
                       dot={{ r: 5, fill: '#facc15' }}
-                      name="Model Prediction (kWh)"
+                      name="Predicted Next Bills"
                     />
                   </ReLineChart>
                 </ResponsiveContainer>
@@ -278,14 +277,14 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
         <div className="card-emerald p-5 flex items-center space-x-3 text-xs text-emerald-200/80">
           <Info className="w-4 h-4 text-yellow-400 shrink-0" />
           <span>
-            No bills added yet — upload a bill photo/PDF or use <strong>Enter Details Manually</strong> above to see your real ML model predictions here.
+            No bills added yet — upload a bill photo/PDF or use <strong>Enter Details Manually</strong> above to see your upcoming bill predictions right here.
           </span>
         </div>
       )}
 
       {/* 4. Quick Navigation Cards */}
       <section className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300">Explore PowerPulse Tools</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300">Explore More Features</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             type="button"
@@ -298,7 +297,7 @@ export default function Dashboard({ user, onNavigate, onBillSaved }) {
             </div>
             <div>
               <div className="text-sm font-bold text-white">Future Bills</div>
-              <p className="text-xs text-emerald-300/75 mt-0.5">3-month ML predictions &amp; tariff breakdown</p>
+              <p className="text-xs text-emerald-300/75 mt-0.5">See what your next 3 bills may cost</p>
             </div>
           </button>
 

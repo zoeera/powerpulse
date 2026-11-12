@@ -135,10 +135,10 @@ export default function App() {
           <div className="flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
             <span className="font-bold text-white">PowerPulse India</span>
-            <span>• AI Electricity Forecasting & Rooftop Solar Optimizer</span>
+            <span>• Smart Electricity Bill Helper &amp; Solar Savings Calculator</span>
           </div>
           <div className="text-emerald-300/50">
-            DISCOM Support: TGSPDCL, UPPCL, MPWZ, BSES Delhi • Gruha Jyothi & PM Surya Ghar Compliant
+            Electricity Boards: TGSPDCL, UPPCL, MPWZ, BSES Delhi • Gruha Jyothi &amp; PM Surya Ghar
           </div>
         </div>
       </footer>

@@ -237,7 +237,7 @@ export default function BillUpload({ onBillSaved, onNavigate, embedded = false }
               <span>Upload or Enter Your Electricity Bill</span>
             </h2>
             <p className="text-xs text-emerald-300/75 mt-0.5">
-              Supports TGSPDCL, UPPCL, MPWZ, BSES Delhi & manual entry — model predictions appear below right after saving.
+              Works with TGSPDCL, UPPCL, MPWZ, BSES Delhi, or manual entry — your upcoming bill predictions appear right below after saving.
             </p>
           </div>
         </div>
@@ -410,9 +410,9 @@ export default function BillUpload({ onBillSaved, onNavigate, embedded = false }
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Model Predictions (Based on Your Bill)</h2>
+                <h2 className="text-lg font-bold text-white">Upcoming Bill Predictions (Based on Your Bill)</h2>
                 <p className="text-xs text-emerald-300/75">
-                  Model: <strong className="text-emerald-200">{billPrediction?.model_used || 'bill_history_model.joblib'}</strong> • Calculated from {billPrediction?.bill_count_used || 1} saved bill(s)
+                  Calculated using your {billPrediction?.bill_count_used || 1} saved bill(s) and seasonal weather changes
                 </p>
               </div>
             </div>
