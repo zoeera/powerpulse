@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Zap, IndianRupee, Sun, AlertOctagon, TrendingUp, Calendar, 
-  ArrowUpRight, ShieldCheck, PieChart as PieIcon, UploadCloud, ChevronRight,
-  CheckCircle2, Sparkles, HelpCircle, Receipt, Landmark
+import {
+  Zap, IndianRupee, Sun, TrendingUp, UploadCloud, ChevronRight,
+  Cpu, FileText, LineChart, Receipt, CheckCircle2, Info
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, 
-  Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell 
+import {
+  ResponsiveContainer, LineChart as ReLineChart, Line, XAxis, YAxis,
+  Tooltip, CartesianGrid, Legend
 } from 'recharts';
 import { api } from '../api/client';
+import BillUpload from './BillUpload';
 import SpikeAlertBanner from '../components/SpikeAlertBanner';
 import ConfidenceBadge from '../components/ConfidenceBadge';
-import DisclaimerBanner from '../components/DisclaimerBanner';
-
-const PIE_COLORS = ['#10b981', '#facc15', '#34d399', '#38bdf8', '#059669', '#f59e0b'];
 
 function formatBillDate(dateStr) {
   if (!dateStr) return '—';
@@ -22,41 +19,33 @@ function formatBillDate(dateStr) {
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-export default function Dashboard({ user, onNavigate }) {
-  const [loading, setLoading] = useState(true);
+export default function Dashboard({ user, onNavigate, onBillSaved }) {
   const [bills, setBills] = useState([]);
   const [forecast, setForecast] = useState(null);
   const [spikes, setSpikes] = useState([]);
-  const [appliances, setAppliances] = useState([]);
-  const [solarData, setSolarData] = useState(null);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
   const loadDashboardData = async () => {
-    setLoading(true);
     try {
-      const [billsData, forecastData, spikesData, appData, recData] = await Promise.all([
+      const [billsData, forecastData, spikesData] = await Promise.all([
         api.getBills().catch(() => []),
         api.getMonthlyForecast().catch(() => null),
         api.getSpikes(true).catch(() => []),
-        api.getAppliances().catch(() => []),
-        api.getRecommendations().catch(() => []),
       ]);
-
       setBills(billsData || []);
       setForecast(forecastData);
       setSpikes(spikesData || []);
-      setAppliances(appData || []);
-      
-      const solar = (recData || []).find(r => r.category === 'solar');
-      setSolarData(solar);
     } catch (e) {
-      console.error('Error loading dashboard data', e);
-    } finally {
-      setLoading(false);
+      console.error('Error loading home data', e);
     }
+  };
+
+  const handleBillUploadedOrSaved = async (savedBill) => {
+    if (onBillSaved) onBillSaved(savedBill);
+    await loadDashboardData();
   };
 
   const handleResolveSpike = async (spikeId) => {
@@ -68,399 +57,297 @@ export default function Dashboard({ user, onNavigate }) {
     }
   };
 
-  // Build chart history + forecast series
-  const chartData = [];
   const sortedBills = [...bills].sort((a, b) => new Date(a.to_date) - new Date(b.to_date));
-  
-  if (sortedBills.length > 0) {
+  const hasRealBills = sortedBills.length > 0;
+  const hasModelForecast = hasRealBills && forecast && forecast.bill_count_used > 0;
+
+  // Build trend chart ONLY when actual bills exist (zero mock/fake values)
+  const chartData = [];
+  if (hasRealBills) {
     sortedBills.slice(-6).forEach(b => {
       const d = new Date(b.to_date);
-      const label = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+      const label = Number.isNaN(d.getTime())
+        ? String(b.to_date)
+        : d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
       chartData.push({
         name: label,
-        Actual_kWh: b.units_consumed_kwh,
+        Actual_kWh: Number(b.units_consumed_kwh) || 0,
         Forecast_kWh: null,
-        Net_Bill_INR: b.net_payable,
       });
     });
-  } else {
-    chartData.push(
-      { name: 'Aug', Actual_kWh: 145, Forecast_kWh: null, Net_Bill_INR: 0 },
-      { name: 'Sep', Actual_kWh: 160, Forecast_kWh: null, Net_Bill_INR: 0 },
-      { name: 'Oct', Actual_kWh: 152, Forecast_kWh: null, Net_Bill_INR: 0 },
-      { name: 'Nov', Actual_kWh: 148, Forecast_kWh: null, Net_Bill_INR: 0 }
-    );
-  }
 
-  // Append next month forecast
-  if (forecast) {
-    const d = new Date(forecast.target_date);
-    const label = `${d.toLocaleDateString('en-IN', { month: 'short' })} (Est.)`;
-    chartData.push({
-      name: label,
-      Actual_kWh: null,
-      Forecast_kWh: forecast.predicted_kwh,
-      Net_Bill_INR: forecast.estimated_cost_inr,
-    });
+    if (hasModelForecast && forecast.forecast_timeline?.length) {
+      forecast.forecast_timeline.forEach(pt => {
+        chartData.push({
+          name: pt.month,
+          Actual_kWh: null,
+          Forecast_kWh: Number(pt.kwh) || 0,
+        });
+      });
+    }
   }
-
-  // Appliance breakdown pie
-  const pieData = appliances.length > 0 ? appliances.map(a => ({
-    name: a.appliance_type,
-    value: a.estimated_monthly_kwh
-  })) : [
-    { name: 'Air Conditioning', value: 75 },
-    { name: 'Refrigerator', value: 36 },
-    { name: 'Fans & Ventilation', value: 25 },
-    { name: 'Lighting & TVs', value: 18 },
-    { name: 'Water Geyser', value: 14 },
-  ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
-      {/* Radiant Gradient Emerald Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl p-7 sm:p-8 bg-gradient-emerald-hero shadow-2xl">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none"></div>
-
-        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-          <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-md border border-white/25 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-              <span>Electricity & Solar Dashboard</span>
-            </div>
-            
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* 1. Brief Introduction & How PowerPulse Works */}
+      <section className="rounded-2xl p-6 sm:p-7 bg-gradient-emerald-hero space-y-5">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="space-y-1.5">
+            <span className="inline-flex items-center space-x-1.5 text-xs font-bold uppercase tracking-wider text-yellow-300">
+              <Zap className="w-3.5 h-3.5" />
+              <span>About PowerPulse India</span>
+            </span>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Welcome, <span className="text-yellow-300 text-glow-yellow">{user?.full_name || 'Consumer'}</span>
+              Smart Electricity Bill Reader &amp; ML Predictor
             </h1>
-            
-            <p className="text-sm text-emerald-100 mt-1 max-w-2xl font-medium">
-              Provider: <strong className="text-white font-bold">{user?.utility || 'TGSPDCL'}</strong> • 
-              Plan: <strong className="text-white font-bold">{user?.tariff_category || 'LT-I(A)'}</strong>
-              {user?.utility === 'TGSPDCL' && ' • Gruha Jyothi (Under 200 units ₹0 Bill)'}
+            <p className="text-sm text-emerald-50/90 max-w-3xl leading-relaxed">
+              PowerPulse helps you understand your electricity bill, check government subsidies, track high-cost home appliances,
+              predict your upcoming monthly bills using trained machine learning models, and estimate rooftop solar savings.
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center space-x-3 w-full sm:w-auto">
-            <button
-              onClick={() => onNavigate('bills')}
-              className="btn-yellow-contrast flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-sm flex items-center justify-center space-x-2 transition-transform active:scale-95"
-            >
-              <UploadCloud className="w-4 h-4 stroke-[2.5]" />
-              <span>Upload Bill</span>
-            </button>
-            <button
-              onClick={() => onNavigate('eco')}
-              className="bg-white/15 hover:bg-white/25 text-white border border-white/30 backdrop-blur-md flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 transition"
-            >
-              <Sun className="w-4 h-4 text-yellow-300" />
-              <span>Solar Savings</span>
-            </button>
+        {/* Simple 3-Step Guide */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
+          <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
+            <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
+              Step 1 • Upload Your Bill
+            </div>
+            <p className="text-xs text-emerald-50/85 leading-relaxed">
+              Upload a bill photo/PDF or enter details manually right below.
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
+            <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
+              Step 2 • View Model Predictions
+            </div>
+            <p className="text-xs text-emerald-50/85 leading-relaxed">
+              Right after saving, the ML model predicts your next 3 months of units and tariff cost.
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#062b20]/70 border border-white/15 p-4">
+            <div className="text-xs font-extrabold text-yellow-300 uppercase tracking-wider mb-1">
+              Step 3 • Explore Tools &amp; PDF
+            </div>
+            <p className="text-xs text-emerald-50/85 leading-relaxed">
+              Use the top menu to check Appliances, Future Bills, Solar &amp; Savings, or download a PDF report.
+            </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Spike Alert Banner */}
+      {/* Spike Alerts (only when real spikes exist) */}
       <SpikeAlertBanner spikes={spikes} onResolve={handleResolveSpike} />
 
-      {/* Primary KPI Cards — clean symmetrical 4-column grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        {/* Next Month Estimated Bill */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Expected Next Bill</span>
-            <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
-              <IndianRupee className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-black text-white">
-              ₹{(Number(forecast?.estimated_cost_inr) || 0).toLocaleString('en-IN')}
-            </div>
-            <div className="flex items-center mt-2.5">
-              <ConfidenceBadge tier={forecast?.confidence_tier} />
-            </div>
-            {user?.utility === 'TGSPDCL' && (Number(forecast?.predicted_kwh) || 148) <= 200 && (
-              <div className="mt-3 flex items-center text-[11px] font-bold text-yellow-300 bg-yellow-500/15 border border-yellow-400/30 rounded-lg px-2.5 py-1">
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 flex-shrink-0 text-yellow-400" />
-                <span>Free Under Gruha Jyothi (&le;200 units)</span>
+      {/* 2. Upload Bill Section & Instant Predictions Right on Home */}
+      <section className="card-emerald p-6 sm:p-7">
+        <BillUpload
+          embedded
+          onBillSaved={handleBillUploadedOrSaved}
+          onNavigate={onNavigate}
+        />
+      </section>
+
+      {/* 3. Saved Bills & Current Model Summary (ONLY shown when at least 1 real bill is saved) */}
+      {hasRealBills ? (
+        <section className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Latest Saved Bill */}
+            {(() => {
+              const lb = sortedBills[sortedBills.length - 1];
+              return (
+                <div className="card-emerald p-5 flex flex-col justify-between">
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Latest Saved Bill</span>
+                    <Receipt className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="mt-3">
+                    <div className="text-3xl font-black text-white">
+                      {Number(lb.units_consumed_kwh || 0)} <span className="text-sm font-normal text-emerald-300/80">kWh</span>
+                    </div>
+                    <div className="text-sm font-bold text-yellow-300 mt-1">
+                      Paid: ₹{(Number(lb.net_payable) || 0).toLocaleString('en-IN')}
+                    </div>
+                    <p className="text-xs text-emerald-300/70 mt-2">
+                      {lb.provider || user?.utility} • {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Next Month ML Model Prediction */}
+            {hasModelForecast && (
+              <div className="card-emerald p-5 flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">ML Model Next Month</span>
+                  <TrendingUp className="w-4 h-4 text-yellow-400" />
+                </div>
+                <div className="mt-3">
+                  <div className="text-3xl font-black text-white">
+                    {Number(forecast.predicted_kwh || 0).toFixed(1)} <span className="text-sm font-normal text-emerald-300/80">kWh</span>
+                  </div>
+                  <div className="text-sm font-bold text-yellow-300 mt-1">
+                    Estimated Bill: ₹{Math.round(Number(forecast.estimated_cost_inr) || 0).toLocaleString('en-IN')}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <ConfidenceBadge tier={forecast.confidence_tier} />
+                    <span className="text-[11px] text-emerald-300/70">{forecast.model_used}</span>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Forecast Usage */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Expected Usage</span>
-            <div className="p-2.5 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30">
-              <Zap className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-black text-white">
-              {Number(forecast?.predicted_kwh || 148).toFixed(1)}{' '}
-              <span className="text-sm font-normal text-emerald-300/80">kWh</span>
-            </div>
-            <p className="text-xs text-emerald-300/70 mt-2">
-              Based on {forecast?.bill_count_used ?? bills.length} saved bills & season
-            </p>
-          </div>
-        </div>
-
-        {/* Solar Savings Potential */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Solar Savings</span>
-            <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
-              <Sun className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-black text-yellow-300 text-glow-yellow">
-              ₹{Math.round(Number(solarData?.monthly_savings_inr) || 2250).toLocaleString('en-IN')}
-              <span className="text-sm font-normal text-emerald-300/80">/mo</span>
-            </div>
-            <p className="text-xs text-emerald-300/70 mt-2">
-              Est. ₹{Math.round(Number(solarData?.annual_savings_inr) || 27000).toLocaleString('en-IN')}/yr + Govt Subsidy
-            </p>
-          </div>
-        </div>
-
-        {/* Tariff Category */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Electricity Plan</span>
-            <div className="p-2.5 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl font-bold text-white">
-              {forecast?.tariff_slab_applied || user?.tariff_category || 'Domestic LT-I(A)'}
-            </div>
-            <p className="text-xs text-emerald-300/70 mt-1">
-              State: {user?.state || 'Telangana'}
-            </p>
-            <div className="mt-2.5 text-xs font-bold text-emerald-300 bg-[#071713] px-2.5 py-1 rounded-md inline-block border border-emerald-500/30">
-              {bills.length} {bills.length === 1 ? 'bill' : 'bills'} saved
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Saved Bill Snapshot Row (only when bills exist, keeps top 4-card grid balanced) */}
-      {sortedBills.length > 0 && (() => {
-        const lb = sortedBills[sortedBills.length - 1];
-        const subsidizedBills = bills.filter(b => (Number(b.subsidy_amount) || 0) > 0);
-        const totalSubsidy = subsidizedBills.reduce((sum, b) => sum + (Number(b.subsidy_amount) || 0), 0);
-        return (
-          <div className={`grid grid-cols-1 ${totalSubsidy > 0 ? 'md:grid-cols-2' : ''} gap-5`}>
-            <div className="card-emerald p-5 flex items-center justify-between gap-4">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Last Uploaded Bill</span>
-                <div className="text-2xl font-black text-white mt-1">
-                  ₹{lb.net_payable != null ? (Number(lb.net_payable) || 0).toLocaleString('en-IN') : '—'}
+            {/* Plan & Total Bills */}
+            <div className="card-emerald p-5 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Tariff &amp; History</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="mt-3">
+                <div className="text-2xl font-black text-white">
+                  {forecast?.tariff_slab_applied || user?.tariff_category || 'Domestic'}
                 </div>
-                <p className="text-xs text-emerald-300/70 mt-1">
-                  {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)} • {Number(lb.units_consumed_kwh) || 0} kWh ({lb.provider || user?.utility})
+                <p className="text-xs text-emerald-300/80 mt-1">
+                  {sortedBills.length} saved {sortedBills.length === 1 ? 'bill' : 'bills'} in your account
                 </p>
-              </div>
-              <div className="p-3 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30 shrink-0">
-                <Receipt className="w-5 h-5" />
+                <button
+                  type="button"
+                  onClick={() => onNavigate('forecasts')}
+                  className="mt-3 text-xs font-bold text-yellow-300 hover:text-yellow-200 inline-flex items-center"
+                >
+                  <span>View Full 3-Month Forecast</span>
+                  <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                </button>
               </div>
             </div>
+          </div>
 
-            {totalSubsidy > 0 && (
-              <div className="card-emerald p-5 flex items-center justify-between gap-4">
+          {/* Usage & Model Forecast Chart (real bills only) */}
+          {chartData.length > 0 && (
+            <div className="card-emerald p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                 <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Govt Subsidy Saved</span>
-                  <div className="text-2xl font-black text-yellow-300 text-glow-yellow mt-1">
-                    ₹{Math.round(totalSubsidy).toLocaleString('en-IN')}
-                  </div>
-                  <p className="text-xs text-emerald-300/70 mt-1">
-                    Across {subsidizedBills.length} subsidized {subsidizedBills.length === 1 ? 'bill' : 'bills'}
-                  </p>
+                  <h2 className="text-base font-bold text-white">Saved Bills &amp; Model Forecast</h2>
+                  <p className="text-xs text-emerald-300/70">Actual recorded units vs. ML model predictions</p>
                 </div>
-                <div className="p-3 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30 shrink-0">
-                  <Landmark className="w-5 h-5" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('reports')}
+                  className="text-xs font-bold text-yellow-300 hover:text-yellow-200 inline-flex items-center"
+                >
+                  <span>View All Bills &amp; PDF</span>
+                  <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                </button>
               </div>
-            )}
-          </div>
-        );
-      })()}
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ReLineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#0a2a22" />
+                    <XAxis dataKey="name" stroke="#6ee7b7" fontSize={12} tickLine={false} />
+                    <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} unit=" kWh" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#071713', borderRadius: '12px', border: '1px solid #10b981', color: '#ffffff' }}
+                      formatter={(val, name) => [`${val} kWh`, name]}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="Actual_kWh"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      dot={{ r: 5, fill: '#10b981' }}
+                      name="Saved Bills (kWh)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="Forecast_kWh"
+                      stroke="#facc15"
+                      strokeWidth={3}
+                      strokeDasharray="5 5"
+                      dot={{ r: 5, fill: '#facc15' }}
+                      name="Model Prediction (kWh)"
+                    />
+                  </ReLineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </section>
+      ) : (
+        <div className="card-emerald p-5 flex items-center space-x-3 text-xs text-emerald-200/80">
+          <Info className="w-4 h-4 text-yellow-400 shrink-0" />
+          <span>
+            No bills added yet — upload a bill photo/PDF or use <strong>Enter Details Manually</strong> above to see your real ML model predictions here.
+          </span>
+        </div>
+      )}
 
-      {/* Main Charts: Line Chart + Donut Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Trend & Forecast Chart */}
-        <div className="lg:col-span-2 card-emerald p-6 sm:p-7">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
+      {/* 4. Quick Navigation Cards */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300">Explore PowerPulse Tools</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <button
+            type="button"
+            onClick={() => onNavigate('forecasts')}
+            className="card-emerald card-emerald-hover p-4 text-left flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <LineChart className="w-5 h-5 text-yellow-400" />
+              <ChevronRight className="w-4 h-4 text-emerald-400" />
+            </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Monthly Electricity Usage & Next Bill</h2>
-              <p className="text-xs text-emerald-300/70 mt-0.5">Track your monthly units and estimated upcoming bill</p>
+              <div className="text-sm font-bold text-white">Future Bills</div>
+              <p className="text-xs text-emerald-300/75 mt-0.5">3-month ML predictions &amp; tariff breakdown</p>
             </div>
-            <button
-              onClick={() => onNavigate('forecasts')}
-              className="text-xs font-bold text-yellow-300 hover:text-yellow-200 flex items-center transition"
-            >
-              <span>View Future Bills</span>
-              <ChevronRight className="w-3.5 h-3.5 ml-1" />
-            </button>
-          </div>
-
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#0a2a22" />
-                <XAxis dataKey="name" stroke="#6ee7b7" fontSize={12} tickLine={false} />
-                <YAxis stroke="#6ee7b7" fontSize={12} tickLine={false} unit=" kWh" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#071713', borderRadius: '12px', border: '1px solid #10b981', color: '#ffffff' }}
-                  formatter={(val, name) => [`${val} Units`, name === 'Actual_kWh' ? 'Actual Usage' : 'Estimated Usage']}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="Actual_kWh"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={{ r: 5, fill: '#10b981' }}
-                  activeDot={{ r: 7 }}
-                  name="Past Usage (Units)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Forecast_kWh"
-                  stroke="#facc15"
-                  strokeWidth={3}
-                  strokeDasharray="5 5"
-                  dot={{ r: 6, fill: '#facc15' }}
-                  name="Estimated Next Usage"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="mt-4">
-            <DisclaimerBanner />
-          </div>
-        </div>
-
-        {/* Appliance Breakdown Donut Chart */}
-        <div className="card-emerald p-6 sm:p-7 flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h2 className="text-lg font-bold text-white">Where Your Power Goes</h2>
-              <button
-                onClick={() => onNavigate('appliances')}
-                className="text-xs font-bold text-yellow-300 hover:text-yellow-200 transition"
-              >
-                Edit
-              </button>
-            </div>
-            <p className="text-xs text-emerald-300/70 mb-4">Estimated units used per month by your home appliances</p>
-
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#071713', borderRadius: '12px', border: '1px solid #10b981', color: '#ffffff' }}
-                    formatter={(val) => [`${val} Units/mo`, 'Estimated']}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="space-y-2.5 mt-2">
-              {pieData.slice(0, 4).map((p, idx) => (
-                <div key={p.name} className="flex justify-between items-center text-xs">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}></span>
-                    <span className="text-emerald-100 truncate max-w-[150px]">{p.name}</span>
-                  </div>
-                  <span className="font-bold text-white">{p.value} Units</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          </button>
 
           <button
+            type="button"
             onClick={() => onNavigate('appliances')}
-            className="w-full mt-5 py-2.5 px-3 text-xs font-bold rounded-xl emerald-subpanel text-white hover:border-emerald-400 transition text-center"
+            className="card-emerald card-emerald-hover p-4 text-left flex flex-col justify-between"
           >
-            Manage My Appliances
+            <div className="flex items-center justify-between mb-2">
+              <Cpu className="w-5 h-5 text-emerald-400" />
+              <ChevronRight className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white">Appliances</div>
+              <p className="text-xs text-emerald-300/75 mt-0.5">See which home devices cost you the most</p>
+            </div>
           </button>
-        </div>
-      </div>
 
-      {/* Recent Bills Table */}
-      <div className="card-emerald p-6 sm:p-7">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-lg font-bold text-white">Recent Bills</h2>
-            <p className="text-xs text-emerald-300/70 mt-0.5">
-              {sortedBills.length > 0
-                ? `Your last ${Math.min(sortedBills.length, 5)} electricity bills`
-                : 'No bills uploaded yet'}
-            </p>
-          </div>
           <button
-            onClick={() => onNavigate('reports')}
-            className="text-xs font-bold text-yellow-300 hover:text-yellow-200 flex items-center transition"
+            type="button"
+            onClick={() => onNavigate('eco')}
+            className="card-emerald card-emerald-hover p-4 text-left flex flex-col justify-between"
           >
-            <span>View All</span>
-            <ChevronRight className="w-3.5 h-3.5 ml-1" />
+            <div className="flex items-center justify-between mb-2">
+              <Sun className="w-5 h-5 text-yellow-400" />
+              <ChevronRight className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white">Solar &amp; Savings</div>
+              <p className="text-xs text-emerald-300/75 mt-0.5">Calculate rooftop solar &amp; PM Surya Ghar subsidy</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate('reports')}
+            className="card-emerald card-emerald-hover p-4 text-left flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <FileText className="w-5 h-5 text-emerald-400" />
+              <ChevronRight className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white">History &amp; PDF</div>
+              <p className="text-xs text-emerald-300/75 mt-0.5">View saved bills &amp; download PDF report</p>
+            </div>
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-emerald-800/60">
-                <th className="text-left text-xs font-bold uppercase tracking-wider text-emerald-400 pb-3 pr-4">Period</th>
-                <th className="text-right text-xs font-bold uppercase tracking-wider text-emerald-400 pb-3 pr-4">Units (kWh)</th>
-                <th className="text-right text-xs font-bold uppercase tracking-wider text-emerald-400 pb-3">Amount Paid</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedBills.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-6 text-center text-xs text-emerald-300/60">
-                    Upload your first electricity bill to view recent billing history.
-                  </td>
-                </tr>
-              ) : (
-                [...sortedBills].reverse().slice(0, 5).map((b, i) => (
-                  <tr key={b.id || i} className="border-b border-emerald-900/40 hover:bg-emerald-900/20 transition">
-                    <td className="py-3 pr-4 text-emerald-100 whitespace-nowrap">
-                      {formatBillDate(b.from_date)} – {formatBillDate(b.to_date)}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-bold text-white">{b.units_consumed_kwh ?? 0}</td>
-                    <td className="py-3 text-right font-black text-yellow-300">
-                      ₹{(Number(b.net_payable) || 0).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }

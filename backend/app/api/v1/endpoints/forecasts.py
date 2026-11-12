@@ -29,6 +29,27 @@ def get_monthly_forecast(
 
     bill_kwh_list = [b.units_consumed_kwh for b in bills if b.units_consumed_kwh is not None]
     bill_months = [b.to_date.month for b in bills if b.units_consumed_kwh is not None and b.to_date]
+
+    if not bill_kwh_list:
+        empty_pred = model_loader.predict_bill_history(month, year, [])
+        return ForecastResponse(
+            forecast_type="monthly",
+            target_date=target_date,
+            predicted_kwh=0.0,
+            estimated_cost_inr=0.0,
+            confidence_tier=empty_pred["confidence_tier"],
+            confidence_label=empty_pred["confidence_label"],
+            model_used=empty_pred["model_used"],
+            is_estimate=False,
+            disclaimer=empty_pred["disclaimer"],
+            source_info="Upload an electricity bill to generate ML model predictions",
+            as_of_date=today,
+            forecast_timeline=[],
+            bill_count_used=0,
+            tariff_slab_applied=None,
+            subsidy_applied_inr=0.0,
+        )
+
     active_provider = bills[-1].provider if bills and bills[-1].provider else current_user.utility
 
     # Predict 3-month timeline (Next Month, Month + 2, Month + 3) using seasonal + tariff calculations
@@ -185,6 +206,24 @@ def get_bill_forecast(
 
     bill_kwh_list = [b.units_consumed_kwh for b in bills if b.units_consumed_kwh is not None]
     bill_months = [b.to_date.month for b in bills if b.units_consumed_kwh is not None and b.to_date]
+
+    if not bill_kwh_list:
+        empty_pred = model_loader.predict_bill_history(next_month, next_year, [])
+        return BillForecastResponse(
+            forecast_month=month_name,
+            predicted_kwh=0.0,
+            estimated_energy_charges=0.0,
+            estimated_fixed_charges=0.0,
+            estimated_customer_charges=0.0,
+            estimated_duty=0.0,
+            estimated_subsidy=0.0,
+            subsidy_scheme=None,
+            net_payable_inr=0.0,
+            confidence_tier=empty_pred["confidence_tier"],
+            disclaimer=empty_pred["disclaimer"],
+            as_of_date=today
+        )
+
     active_provider = bills[-1].provider if bills and bills[-1].provider else current_user.utility
     pred_res = model_loader.predict_bill_history(next_month, next_year, bill_kwh_list, bill_months)
     predicted_kwh = pred_res["predicted_kwh"]

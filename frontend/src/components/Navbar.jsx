@@ -4,11 +4,10 @@ import { Zap, LayoutDashboard, UploadCloud, Cpu, LineChart, Sun, FileText, LogOu
 export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
   const navItems = [
     { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-    { id: 'bills', label: 'Upload Bill', icon: UploadCloud },
     { id: 'appliances', label: 'Appliances', icon: Cpu },
     { id: 'forecasts', label: 'Future Bills', icon: LineChart },
     { id: 'eco', label: 'Solar & Savings', icon: Sun },
-    { id: 'reports', label: 'Settings & PDF', icon: FileText },
+    { id: 'reports', label: 'History & PDF', icon: FileText },
   ];
 
   const mobileStripRef = useRef(null);

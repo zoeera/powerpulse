@@ -65,7 +65,7 @@ function BillFieldsGrid({ fields, values, onChange, enforceRequired = false }) {
   );
 }
 
-export default function BillUpload({ onBillSaved, onNavigate }) {
+export default function BillUpload({ onBillSaved, onNavigate, embedded = false }) {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'manual'
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -215,20 +215,33 @@ export default function BillUpload({ onBillSaved, onNavigate }) {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-      {/* Radiant Gradient Emerald Header */}
-      <div className="relative overflow-hidden rounded-3xl p-7 sm:p-8 bg-gradient-emerald-hero shadow-2xl">
-        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-md border border-white/25 mb-3">
-          <UploadCloud className="w-3.5 h-3.5 text-yellow-300" />
-          <span>Smart Bill Scanner (TGSPDCL, UPPCL, MPWZ, BSES & more)</span>
+    <div className={embedded ? 'space-y-6' : 'max-w-5xl mx-auto px-4 py-8 space-y-6'}>
+      {!embedded ? (
+        <div className="relative overflow-hidden rounded-3xl p-7 sm:p-8 bg-gradient-emerald-hero">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold bg-white/15 text-white border border-white/25 mb-3">
+            <UploadCloud className="w-3.5 h-3.5 text-yellow-300" />
+            <span>Smart Bill Scanner (TGSPDCL, UPPCL, MPWZ, BSES & more)</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            Upload Electricity Bill
+          </h1>
+          <p className="text-sm text-emerald-100 mt-1 max-w-2xl font-medium">
+            Upload a photo or PDF of your bill (or enter details manually) to get instant ML model predictions.
+          </p>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Upload Electricity Bill
-        </h1>
-        <p className="text-sm text-emerald-100 mt-1 max-w-2xl font-medium">
-          Take a photo of your paper bill or upload a PDF. We automatically read your units, rates, and government discounts.
-        </p>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+              <UploadCloud className="w-5 h-5 text-yellow-400" />
+              <span>Upload or Enter Your Electricity Bill</span>
+            </h2>
+            <p className="text-xs text-emerald-300/75 mt-0.5">
+              Supports TGSPDCL, UPPCL, MPWZ, BSES Delhi & manual entry — model predictions appear below right after saving.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-emerald-900/60">
@@ -389,17 +402,17 @@ export default function BillUpload({ onBillSaved, onNavigate }) {
       )}
 
       {/* Prediction Card shown immediately after uploading or saving a bill */}
-      {(loadingPrediction || billPrediction) && (
-        <div className="card-emerald p-6 sm:p-7 space-y-5 border-yellow-400/40">
+      {(loadingPrediction || (billPrediction && billPrediction.bill_count_used > 0)) && (
+        <div className="card-emerald p-6 space-y-5 border-yellow-400/40">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-emerald-900/60 pb-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Prediction Based on Your Uploaded Bill</h2>
-                <p className="text-xs text-emerald-300/70">
-                  Updated immediately using your latest bill units, seasonal weather trend, and utility tariff slab
+                <h2 className="text-lg font-bold text-white">Model Predictions (Based on Your Bill)</h2>
+                <p className="text-xs text-emerald-300/75">
+                  Model: <strong className="text-emerald-200">{billPrediction?.model_used || 'bill_history_model.joblib'}</strong> • Calculated from {billPrediction?.bill_count_used || 1} saved bill(s)
                 </p>
               </div>
             </div>

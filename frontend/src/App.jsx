@@ -88,7 +88,19 @@ export default function App() {
           <Onboarding onComplete={handleAuthComplete} />
         )}
         {activeTab === 'dashboard' && (
-          <Dashboard user={user} onNavigate={setActiveTab} />
+          <Dashboard
+            user={user}
+            onNavigate={setActiveTab}
+            onBillSaved={(savedBill) => {
+              if (!savedBill) return;
+              setUser(prev => ({
+                ...prev,
+                ...(savedBill.provider ? { utility: savedBill.provider } : {}),
+                ...(savedBill.state ? { state: savedBill.state } : {}),
+                ...(savedBill.tariff_category ? { tariff_category: savedBill.tariff_category } : {}),
+              }));
+            }}
+          />
         )}
         {activeTab === 'bills' && (
           <BillUpload
@@ -108,7 +120,7 @@ export default function App() {
           <ApplianceQuestionnaire />
         )}
         {activeTab === 'forecasts' && (
-          <ForecastDetails />
+          <ForecastDetails onNavigate={setActiveTab} />
         )}
         {activeTab === 'eco' && (
           <EcoAlternatives />
