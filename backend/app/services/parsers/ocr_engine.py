@@ -1,6 +1,8 @@
 import io
 import os
 import shutil
+import subprocess
+import tempfile
 from typing import Optional
 from PIL import Image, ImageEnhance, ImageOps
 
@@ -17,7 +19,7 @@ _rapidocr_checked = False
 
 
 def _get_rapidocr():
-    """Lazy-load RapidOCR only when needed (skipped on low-memory Render free tier when Tesseract is installed)."""
+    """Lazy-load RapidOCR only locally when Tesseract is absent."""
     global _rapidocr, _rapidocr_checked
     if _rapidocr_checked:
         return _rapidocr
@@ -35,54 +37,108 @@ def _get_rapidocr():
     return _rapidocr
 
 
+def _pdf_to_image_bytes(pdf_bytes: bytes) -> Optional[bytes]:
+    """Convert page 1 of a PDF bill into PNG bytes using pdftoppm when available."""
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm:
+        return None
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pdf_path = os.path.join(tmpdir, "bill.pdf")
+        out_prefix = os.path.join(tmpdir, "page")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        try:
+            subprocess.run(
+                [pdftoppm, "-png", "-f", "1", "-l", "1", "-r", "150", pdf_path, out_prefix],
+                check=True,
+                timeout=20,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            for fname in sorted(os.listdir(tmpdir)):
+                if fname.startswith("page") and fname.endswith(".png"):
+                    with open(os.path.join(tmpdir, fname), "rb") as img_f:
+                        return img_f.read()
+        except Exception as e:
+            print(f"[OCR] PDF conversion failed: {e}")
+    return None
+
+
+def _ensure_image_bytes(raw_bytes: bytes) -> Optional[bytes]:
+    """Normalize PDFs into image bytes so PIL can open them."""
+    if raw_bytes.lstrip().startswith(b"%PDF"):
+        return _pdf_to_image_bytes(raw_bytes)
+    return raw_bytes
+
+
 def preprocess_image(image_bytes: bytes) -> Image.Image:
-    """Enhance bill image for higher OCR character recognition accuracy while keeping memory bounded."""
+    """Enhance bill image for fast, reliable OCR while bounding size and memory."""
     img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
     if img.mode != "L":
         img = ImageOps.grayscale(img)
 
-    # Scale small images up for better OCR, cap large photos to stay memory-safe
-    if img.width < 800:
-        scale = 2.0
-    elif img.width < 1200:
-        scale = 1.5
-    else:
-        scale = 1.0
-
-    if scale != 1.0:
+    # Upscale only very small thumbnails; keep Render max dimension <= 1200px for fast CPU OCR
+    max_dim = 1200 if _IS_RENDER else 1600
+    if img.width < 600:
+        scale = 1.8
         img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.BILINEAR)
 
-    if max(img.size) > 2000:
-        img.thumbnail((2000, 2000))
+    if max(img.size) > max_dim:
+        img.thumbnail((max_dim, max_dim), Image.Resampling.BILINEAR)
 
     img = ImageOps.autocontrast(img, cutoff=1)
-    img = ImageEnhance.Contrast(img).enhance(1.3)
+    img = ImageEnhance.Contrast(img).enhance(1.25)
     return img
 
 
+def _run_tesseract(img: Image.Image, lang: str) -> str:
+    """Run fast single-pass English Tesseract first; only fall back to multi-script if needed."""
+    if pytesseract is None or not _HAS_TESSERACT:
+        return ""
+
+    config = "--oem 1 --psm 6"
+    text = ""
+    try:
+        text = pytesseract.image_to_string(img, lang="eng", config=config, timeout=20) or ""
+    except Exception as e:
+        print(f"[OCR] Tesseract eng pass error: {e}")
+
+    # Only pay the multi-language LSTM cost when the bill has very little readable English text
+    if len(text.strip()) < 60 and lang != "eng":
+        try:
+            multi_text = pytesseract.image_to_string(img, lang=lang, config=config, timeout=25) or ""
+            if len(multi_text.strip()) > len(text.strip()):
+                text = multi_text
+        except Exception as e:
+            print(f"[OCR] Tesseract multi-lang pass note: {e}")
+
+    return text.strip()
+
+
 def run_ocr(image_bytes: bytes, lang: str = "eng+hin+tel") -> str:
-    """Run OCR using Tesseract on Linux/Docker (low RAM) or RapidOCR locally when Tesseract is absent."""
-    # On Render/Docker where Tesseract + Hindi/Telugu packs are installed, use Tesseract first to stay well under 512MB RAM
+    """Run OCR using fast Tesseract on Render/Docker or RapidOCR locally."""
+    normalized_bytes = _ensure_image_bytes(image_bytes)
+    if not normalized_bytes:
+        return ""
+
     if _HAS_TESSERACT and _IS_RENDER:
         try:
-            img = preprocess_image(image_bytes)
-            try:
-                text = pytesseract.image_to_string(img, lang=lang)
-            except Exception:
-                text = pytesseract.image_to_string(img, lang="eng")
-            if text and text.strip():
-                return text.strip()
+            img = preprocess_image(normalized_bytes)
+            text = _run_tesseract(img, lang=lang)
+            if text:
+                return text
         except Exception as e:
             print(f"[OCR] Tesseract Error: {e}")
 
-    # Primary local engine (or fallback): RapidOCR (lazy-loaded)
     rapidocr = _get_rapidocr()
     if rapidocr is not None:
         try:
             import numpy as np
-            img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            if max(img.size) > 2000:
-                img.thumbnail((2000, 2000))
+            img = Image.open(io.BytesIO(normalized_bytes)).convert("RGB")
+            if max(img.size) > 1600:
+                img.thumbnail((1600, 1600))
             img_np = np.array(img)
             result, _ = rapidocr(img_np)
             if result:
@@ -93,15 +149,10 @@ def run_ocr(image_bytes: bytes, lang: str = "eng+hin+tel") -> str:
         except Exception as e:
             print(f"[OCR] RapidOCR execution note: {e}")
 
-    # Secondary fallback: Tesseract
-    if pytesseract is not None:
+    if _HAS_TESSERACT:
         try:
-            img = preprocess_image(image_bytes)
-            try:
-                text = pytesseract.image_to_string(img, lang=lang)
-            except Exception:
-                text = pytesseract.image_to_string(img, lang="eng")
-            return text
+            img = preprocess_image(normalized_bytes)
+            return _run_tesseract(img, lang=lang)
         except Exception as e:
             print(f"[OCR] Tesseract Error: {e}")
 

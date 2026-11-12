@@ -25,29 +25,40 @@ class ApiClient {
 
   async request(endpoint, options = {}, retriesLeft = 1) {
     const url = `${API_BASE}${endpoint}`;
-    const headers = options.headers || {};
+    const headers = { ...(options.headers || {}) };
 
     const activeToken = this.token || 'demo_token';
     if (!headers['Authorization']) {
       headers['Authorization'] = `Bearer ${activeToken}`;
     }
 
-    if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
+    const isFormData = options.body instanceof FormData;
+    if (!headers['Content-Type'] && !isFormData) {
       headers['Content-Type'] = 'application/json';
     }
 
+    const timeoutMs = isFormData ? 55000 : 35000;
+    const controller = new AbortController();
+    const timerId = setTimeout(() => controller.abort(), timeoutMs);
+
     let response;
     try {
-      response = await fetch(url, { ...options, headers });
+      response = await fetch(url, { ...options, headers, signal: controller.signal });
     } catch (err) {
-      if (retriesLeft > 0) {
+      clearTimeout(timerId);
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out while waiting for the server. Please try again in a few seconds (or use Enter Details Manually).');
+      }
+      if (retriesLeft > 0 && !isFormData) {
         await new Promise((r) => setTimeout(r, 3000));
         return this.request(endpoint, options, retriesLeft - 1);
       }
       throw new Error('Server is waking up or temporarily unreachable. Please wait 15–30 seconds and try again.');
+    } finally {
+      clearTimeout(timerId);
     }
 
-    if ((response.status === 502 || response.status === 503) && retriesLeft > 0) {
+    if ((response.status === 502 || response.status === 503) && retriesLeft > 0 && !isFormData) {
       await new Promise((r) => setTimeout(r, 3000));
       return this.request(endpoint, options, retriesLeft - 1);
     }

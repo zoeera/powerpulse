@@ -79,24 +79,50 @@ export default function ForecastDetails() {
       {/* 3-Month Projection Cards */}
       {monthlyForecast && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {(monthlyForecast.forecast_timeline || [
-            { month: 'Next Month', kwh: monthlyForecast.predicted_kwh, inr: monthlyForecast.estimated_cost_inr },
-            { month: 'Month + 2', kwh: Math.round(monthlyForecast.predicted_kwh * 1.05), inr: Math.round(monthlyForecast.estimated_cost_inr * 1.05) },
-            { month: 'Month + 3', kwh: Math.round(monthlyForecast.predicted_kwh * 1.12), inr: Math.round(monthlyForecast.estimated_cost_inr * 1.12) },
-          ]).map((item, idx) => (
-            <div key={idx} className="card-emerald card-emerald-hover p-6">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">{item.month}</span>
-              <div className="text-3xl font-black text-white mt-2">
-                {item.kwh} <span className="text-sm font-normal text-emerald-300/80">kWh</span>
+          {(monthlyForecast.forecast_timeline && monthlyForecast.forecast_timeline.length > 0
+            ? monthlyForecast.forecast_timeline
+            : [
+                {
+                  month: 'Next Month',
+                  kwh: monthlyForecast.predicted_kwh ?? 0,
+                  inr: monthlyForecast.estimated_cost_inr ?? 0,
+                  tariff_slab: monthlyForecast.tariff_slab_applied,
+                  subsidy_inr: monthlyForecast.subsidy_applied_inr ?? 0,
+                },
+              ]
+          ).map((item, idx) => {
+            const kwh = Number(item.kwh) || 0;
+            const inr = Number(item.inr) || 0;
+            const subsidy = Number(item.subsidy_inr) || 0;
+            return (
+              <div key={idx} className="card-emerald card-emerald-hover p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">{item.month}</span>
+                    <span className="text-[11px] font-semibold text-emerald-300/70">
+                      {idx === 0 ? 'Upcoming' : `Month +${idx + 1}`}
+                    </span>
+                  </div>
+                  <div className="text-3xl font-black text-white mt-2">
+                    {kwh.toFixed(1)} <span className="text-sm font-normal text-emerald-300/80">kWh</span>
+                  </div>
+                  <div className="text-lg font-bold text-yellow-300 mt-1">
+                    ₹{Math.round(inr).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="inline-block text-[11px] font-bold text-emerald-300 bg-[#071713] border border-emerald-500/30 px-2.5 py-1 rounded-md">
+                    Plan: {item.tariff_slab || monthlyForecast.tariff_slab_applied || 'Domestic'}
+                  </span>
+                  {subsidy > 0 && (
+                    <span className="inline-block text-[11px] font-bold text-yellow-300 bg-yellow-500/15 border border-yellow-400/30 px-2.5 py-1 rounded-md">
+                      Govt Subsidy: ₹{Math.round(subsidy).toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="text-lg font-bold text-yellow-300 mt-1">
-                ₹{item.inr?.toLocaleString('en-IN') || '0.00'}
-              </div>
-              <span className="inline-block mt-3 text-[11px] font-bold text-emerald-300 bg-[#071713] border border-emerald-500/30 px-2.5 py-1 rounded-md">
-                Plan: {monthlyForecast.tariff_slab_applied}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

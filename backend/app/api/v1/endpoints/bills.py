@@ -2,6 +2,7 @@ import json
 from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.db.models import User, Bill, Job, Spike
@@ -55,8 +56,8 @@ async def upload_bill(
     rel_path, _ = save_uploaded_file(contents, file.filename or "bill.jpg", subdir="bills")
     signed_url = generate_signed_url(rel_path)
 
-    # Perform OCR & Parse
-    ocr_text = run_ocr(contents)
+    # Perform OCR & Parse off the event loop so concurrent API calls stay responsive
+    ocr_text = await run_in_threadpool(run_ocr, contents)
     parsed = parse_bill_text(ocr_text, default_provider=current_user.utility)
 
     # Save Bill into DB

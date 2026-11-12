@@ -163,11 +163,11 @@ export default function Dashboard({ user, onNavigate }) {
       {/* Spike Alert Banner */}
       <SpikeAlertBanner spikes={spikes} onResolve={handleResolveSpike} />
 
-      {/* KPI Cards — flex-wrap so 5-6 cards still flow cleanly */}
-      <div className="flex flex-wrap gap-5">
+      {/* Primary KPI Cards — clean symmetrical 4-column grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* Next Month Estimated Bill */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
+        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Expected Next Bill</span>
             <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
@@ -176,22 +176,22 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
           <div className="mt-4">
             <div className="text-3xl font-black text-white">
-              ₹{forecast ? forecast.estimated_cost_inr.toLocaleString('en-IN') : '0.00'}
+              ₹{(Number(forecast?.estimated_cost_inr) || 0).toLocaleString('en-IN')}
             </div>
             <div className="flex items-center mt-2.5">
               <ConfidenceBadge tier={forecast?.confidence_tier} />
             </div>
-            {user?.utility === 'TGSPDCL' && (forecast?.predicted_kwh || 148) <= 200 && (
-              <div className="mt-3 flex items-center text-xs font-bold text-yellow-300 bg-yellow-500/15 border border-yellow-400/30 rounded-lg px-2.5 py-1">
+            {user?.utility === 'TGSPDCL' && (Number(forecast?.predicted_kwh) || 148) <= 200 && (
+              <div className="mt-3 flex items-center text-[11px] font-bold text-yellow-300 bg-yellow-500/15 border border-yellow-400/30 rounded-lg px-2.5 py-1">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 flex-shrink-0 text-yellow-400" />
-                <span>🎉 Free Electricity Qualified (Under 200 units)</span>
+                <span>Free Under Gruha Jyothi (&le;200 units)</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Forecast Usage */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
+        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Expected Usage</span>
             <div className="p-2.5 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30">
@@ -200,17 +200,17 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
           <div className="mt-4">
             <div className="text-3xl font-black text-white">
-              {forecast ? `${forecast.predicted_kwh}` : '148.0'}{' '}
-              <span className="text-base font-normal text-emerald-300/80">Units (kWh)</span>
+              {Number(forecast?.predicted_kwh || 148).toFixed(1)}{' '}
+              <span className="text-sm font-normal text-emerald-300/80">kWh</span>
             </div>
             <p className="text-xs text-emerald-300/70 mt-2">
-              Based on {forecast?.bill_count_used || bills.length} past bills & seasons
+              Based on {forecast?.bill_count_used ?? bills.length} saved bills & season
             </p>
           </div>
         </div>
 
         {/* Solar Savings Potential */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
+        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Solar Savings</span>
             <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
@@ -219,17 +219,17 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
           <div className="mt-4">
             <div className="text-3xl font-black text-yellow-300 text-glow-yellow">
-              ₹{solarData ? Math.round(solarData.monthly_savings_inr).toLocaleString('en-IN') : '2,250'}
+              ₹{Math.round(Number(solarData?.monthly_savings_inr) || 2250).toLocaleString('en-IN')}
               <span className="text-sm font-normal text-emerald-300/80">/mo</span>
             </div>
             <p className="text-xs text-emerald-300/70 mt-2">
-              Save up to ₹78,000 with Govt Subsidy
+              Est. ₹{Math.round(Number(solarData?.annual_savings_inr) || 27000).toLocaleString('en-IN')}/yr + Govt Subsidy
             </p>
           </div>
         </div>
 
         {/* Tariff Category */}
-        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
+        <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Electricity Plan</span>
             <div className="p-2.5 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30">
@@ -238,68 +238,59 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-white">
-              {forecast?.tariff_slab_applied || 'Domestic LT-I(A)'}
+              {forecast?.tariff_slab_applied || user?.tariff_category || 'Domestic LT-I(A)'}
             </div>
             <p className="text-xs text-emerald-300/70 mt-1">
               State: {user?.state || 'Telangana'}
             </p>
-            <div className="mt-2 text-xs font-bold text-emerald-300 bg-[#071713] px-2.5 py-1 rounded-md inline-block border border-emerald-500/30">
-              {bills.length} bills saved
+            <div className="mt-2.5 text-xs font-bold text-emerald-300 bg-[#071713] px-2.5 py-1 rounded-md inline-block border border-emerald-500/30">
+              {bills.length} {bills.length === 1 ? 'bill' : 'bills'} saved
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Last Bill KPI */}
-        {sortedBills.length > 0 && (() => {
-          const lb = sortedBills[sortedBills.length - 1];
-          return (
-            <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Last Bill</span>
-                <div className="p-2.5 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30">
-                  <Receipt className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <div className="text-3xl font-black text-white">
-                  ₹{lb.net_payable != null ? Number(lb.net_payable).toLocaleString('en-IN') : '—'}
+      {/* Saved Bill Snapshot Row (only when bills exist, keeps top 4-card grid balanced) */}
+      {sortedBills.length > 0 && (() => {
+        const lb = sortedBills[sortedBills.length - 1];
+        const subsidizedBills = bills.filter(b => (Number(b.subsidy_amount) || 0) > 0);
+        const totalSubsidy = subsidizedBills.reduce((sum, b) => sum + (Number(b.subsidy_amount) || 0), 0);
+        return (
+          <div className={`grid grid-cols-1 ${totalSubsidy > 0 ? 'md:grid-cols-2' : ''} gap-5`}>
+            <div className="card-emerald p-5 flex items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Last Uploaded Bill</span>
+                <div className="text-2xl font-black text-white mt-1">
+                  ₹{lb.net_payable != null ? (Number(lb.net_payable) || 0).toLocaleString('en-IN') : '—'}
                 </div>
                 <p className="text-xs text-emerald-300/70 mt-1">
-                  {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)}
-                </p>
-                <p className="text-xs text-emerald-300/70 mt-0.5">
-                  {lb.units_consumed_kwh ?? 0} kWh
+                  {formatBillDate(lb.from_date)} – {formatBillDate(lb.to_date)} • {Number(lb.units_consumed_kwh) || 0} kWh ({lb.provider || user?.utility})
                 </p>
               </div>
+              <div className="p-3 rounded-xl emerald-subpanel text-emerald-400 border border-emerald-400/30 shrink-0">
+                <Receipt className="w-5 h-5" />
+              </div>
             </div>
-          );
-        })()}
 
-        {/* Govt Savings KPI — only if any bill has subsidy */}
-        {(() => {
-          const subsidizedBills = bills.filter(b => (Number(b.subsidy_amount) || 0) > 0);
-          const totalSubsidy = subsidizedBills.reduce((sum, b) => sum + (Number(b.subsidy_amount) || 0), 0);
-          if (totalSubsidy <= 0) return null;
-          return (
-            <div className="card-emerald card-emerald-hover p-5 flex flex-col justify-between min-w-[220px] flex-1">
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Govt Savings</span>
-                <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
-                  <Landmark className="w-4 h-4" />
+            {totalSubsidy > 0 && (
+              <div className="card-emerald p-5 flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Govt Subsidy Saved</span>
+                  <div className="text-2xl font-black text-yellow-300 text-glow-yellow mt-1">
+                    ₹{Math.round(totalSubsidy).toLocaleString('en-IN')}
+                  </div>
+                  <p className="text-xs text-emerald-300/70 mt-1">
+                    Across {subsidizedBills.length} subsidized {subsidizedBills.length === 1 ? 'bill' : 'bills'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30 shrink-0">
+                  <Landmark className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-4">
-                <div className="text-3xl font-black text-yellow-300 text-glow-yellow">
-                  ₹{totalSubsidy.toLocaleString('en-IN')}
-                </div>
-                <p className="text-xs text-emerald-300/70 mt-2">
-                  Total subsidy across {subsidizedBills.length} bill(s)
-                </p>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Main Charts: Line Chart + Donut Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

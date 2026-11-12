@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.db.models import User, Bill, MeterReading, Forecast
-from app.schemas.forecast import ForecastResponse, BillForecastResponse, DailyForecastPoint
+from app.schemas.forecast import ForecastResponse, BillForecastResponse, DailyForecastPoint, MonthlyForecastPoint
 from app.ml.model_loader import model_loader
 from app.services.tariff.tariff_calculator import TariffCalculator
 
@@ -27,37 +27,58 @@ def get_monthly_forecast(
         Bill.user_id == current_user.id
     ).order_by(Bill.to_date.asc()).all()
 
-    bill_kwh_list = [b.units_consumed_kwh for b in bills]
+    bill_kwh_list = [b.units_consumed_kwh for b in bills if b.units_consumed_kwh is not None]
+    bill_months = [b.to_date.month for b in bills if b.units_consumed_kwh is not None and b.to_date]
+    active_provider = bills[-1].provider if bills and bills[-1].provider else current_user.utility
 
-    # Predict using ML model loader with Confidence Tiers
-    pred_res = model_loader.predict_bill_history(month, year, bill_kwh_list)
-    predicted_kwh = pred_res["predicted_kwh"]
+    # Predict 3-month timeline (Next Month, Month + 2, Month + 3) using seasonal + tariff calculations
+    rolling_kwh = list(bill_kwh_list)
+    rolling_months = list(bill_months) if len(bill_months) == len(bill_kwh_list) else None
+    timeline: List[MonthlyForecastPoint] = []
+    first_pred_res = None
+    first_tariff_calc = None
 
-    # Calculate estimated bill using tariff calculator
-    tariff_calc = TariffCalculator.calculate_bill(
-        provider=current_user.utility,
-        units_consumed=predicted_kwh,
-        billing_days=30,
-        apply_subsidy=True
-    )
-
-    estimated_cost = tariff_calc["net_payable"]
+    for offset in range(3):
+        m_idx = ((month - 1 + offset) % 12) + 1
+        y_idx = year + ((month - 1 + offset) // 12)
+        pred_i = model_loader.predict_bill_history(m_idx, y_idx, rolling_kwh, rolling_months)
+        kwh_i = pred_i["predicted_kwh"]
+        tariff_i = TariffCalculator.calculate_bill(
+            provider=active_provider,
+            units_consumed=kwh_i,
+            billing_days=30,
+            apply_subsidy=True
+        )
+        if offset == 0:
+            first_pred_res = pred_i
+            first_tariff_calc = tariff_i
+        timeline.append(MonthlyForecastPoint(
+            month=datetime(y_idx, m_idx, 1).strftime("%b %Y"),
+            kwh=kwh_i,
+            inr=tariff_i["net_payable"],
+            tariff_slab=tariff_i["tariff_category"],
+            subsidy_inr=tariff_i["subsidy_amount"],
+        ))
+        rolling_kwh.append(kwh_i)
+        if rolling_months is not None:
+            rolling_months.append(m_idx)
 
     return ForecastResponse(
         forecast_type="monthly",
         target_date=target_date,
-        predicted_kwh=predicted_kwh,
-        estimated_cost_inr=estimated_cost,
-        confidence_tier=pred_res["confidence_tier"],
-        confidence_label=pred_res["confidence_label"],
-        model_used=pred_res["model_used"],
+        predicted_kwh=first_pred_res["predicted_kwh"],
+        estimated_cost_inr=first_tariff_calc["net_payable"],
+        confidence_tier=first_pred_res["confidence_tier"],
+        confidence_label=first_pred_res["confidence_label"],
+        model_used=first_pred_res["model_used"],
         is_estimate=True,
-        disclaimer=pred_res["disclaimer"],
-        source_info=f"Trained on Indian residential consumption benchmarks & {pred_res['model_used']}",
+        disclaimer=first_pred_res["disclaimer"],
+        source_info=f"Trained on Indian residential consumption benchmarks & {first_pred_res['model_used']}",
         as_of_date=today,
-        bill_count_used=pred_res["bills_count_used"],
-        tariff_slab_applied=tariff_calc["tariff_category"],
-        subsidy_applied_inr=tariff_calc["subsidy_amount"]
+        forecast_timeline=timeline,
+        bill_count_used=first_pred_res["bills_count_used"],
+        tariff_slab_applied=first_tariff_calc["tariff_category"],
+        subsidy_applied_inr=first_tariff_calc["subsidy_amount"]
     )
 
 @router.get("/daily", response_model=ForecastResponse)
@@ -162,12 +183,14 @@ def get_bill_forecast(
         Bill.user_id == current_user.id
     ).order_by(Bill.to_date.asc()).all()
 
-    bill_kwh_list = [b.units_consumed_kwh for b in bills]
-    pred_res = model_loader.predict_bill_history(next_month, next_year, bill_kwh_list)
+    bill_kwh_list = [b.units_consumed_kwh for b in bills if b.units_consumed_kwh is not None]
+    bill_months = [b.to_date.month for b in bills if b.units_consumed_kwh is not None and b.to_date]
+    active_provider = bills[-1].provider if bills and bills[-1].provider else current_user.utility
+    pred_res = model_loader.predict_bill_history(next_month, next_year, bill_kwh_list, bill_months)
     predicted_kwh = pred_res["predicted_kwh"]
 
     tariff = TariffCalculator.calculate_bill(
-        provider=current_user.utility,
+        provider=active_provider,
         units_consumed=predicted_kwh,
         billing_days=30,
         apply_subsidy=True

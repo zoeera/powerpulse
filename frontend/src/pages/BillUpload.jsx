@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   UploadCloud, FileText, CheckCircle2, AlertTriangle, 
-  Edit3, Save, IndianRupee, ShieldCheck, RefreshCw, FileCode, Sparkles 
+  Edit3, Save, IndianRupee, ShieldCheck, RefreshCw, FileCode, Sparkles, TrendingUp, Zap, Sun 
 } from 'lucide-react';
 import { api } from '../api/client';
 import ConfidenceBadge from '../components/ConfidenceBadge';
@@ -65,13 +65,16 @@ function BillFieldsGrid({ fields, values, onChange, enforceRequired = false }) {
   );
 }
 
-export default function BillUpload({ onBillSaved }) {
+export default function BillUpload({ onBillSaved, onNavigate }) {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'manual'
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [parsedBill, setParsedBill] = useState(null);
   const [editableFields, setEditableFields] = useState({});
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [billPrediction, setBillPrediction] = useState(null);
+  const [solarEstimate, setSolarEstimate] = useState(null);
+  const [loadingPrediction, setLoadingPrediction] = useState(false);
   const [error, setError] = useState('');
 
   const [manualForm, setManualForm] = useState({
@@ -111,6 +114,21 @@ export default function BillUpload({ onBillSaved }) {
     setError('');
   };
 
+  const refreshPredictionsAfterBill = async () => {
+    setLoadingPrediction(true);
+    try {
+      const [forecastRes, recsRes] = await Promise.all([
+        api.getMonthlyForecast().catch(() => null),
+        api.getRecommendations().catch(() => []),
+      ]);
+      setBillPrediction(forecastRes);
+      const solar = (recsRes || []).find(r => r.category === 'solar') || null;
+      setSolarEstimate(solar);
+    } finally {
+      setLoadingPrediction(false);
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
@@ -139,6 +157,7 @@ export default function BillUpload({ onBillSaved }) {
         consumer_number: res.consumer_number,
       });
       if (onBillSaved) onBillSaved(res);
+      await refreshPredictionsAfterBill();
     } catch (err) {
       setError(err.message || 'Error uploading or parsing bill');
     } finally {
@@ -161,6 +180,7 @@ export default function BillUpload({ onBillSaved }) {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 4000);
       if (onBillSaved) onBillSaved(updated);
+      await refreshPredictionsAfterBill();
     } catch (err) {
       setError(err.message || 'Could not save modifications');
     }
@@ -181,6 +201,7 @@ export default function BillUpload({ onBillSaved }) {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 5000);
       if (onBillSaved) onBillSaved(res);
+      await refreshPredictionsAfterBill();
       setManualForm({ ...EMPTY_MANUAL_FORM });
     } catch (err) {
       setError(err.message || 'Could not save manual bill');
@@ -365,6 +386,91 @@ export default function BillUpload({ onBillSaved }) {
             </button>
           </div>
         </form>
+      )}
+
+      {/* Prediction Card shown immediately after uploading or saving a bill */}
+      {(loadingPrediction || billPrediction) && (
+        <div className="card-emerald p-6 sm:p-7 space-y-5 border-yellow-400/40">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-emerald-900/60 pb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl emerald-subpanel text-yellow-400 border border-yellow-400/30">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white">Prediction Based on Your Uploaded Bill</h2>
+                <p className="text-xs text-emerald-300/70">
+                  Updated immediately using your latest bill units, seasonal weather trend, and utility tariff slab
+                </p>
+              </div>
+            </div>
+            {billPrediction && <ConfidenceBadge tier={billPrediction.confidence_tier} />}
+          </div>
+
+          {loadingPrediction ? (
+            <div className="flex items-center space-x-2 text-xs text-emerald-300 py-4">
+              <RefreshCw className="w-4 h-4 animate-spin text-yellow-400" />
+              <span>Calculating your upcoming bill forecast...</span>
+            </div>
+          ) : billPrediction && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(billPrediction.forecast_timeline && billPrediction.forecast_timeline.length > 0
+                  ? billPrediction.forecast_timeline
+                  : [{ month: 'Next Month', kwh: billPrediction.predicted_kwh, inr: billPrediction.estimated_cost_inr, tariff_slab: billPrediction.tariff_slab_applied }]
+                ).map((item, idx) => (
+                  <div key={idx} className="emerald-subpanel p-4 rounded-2xl border border-emerald-500/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">{item.month}</span>
+                      <span className="text-[10px] font-bold text-emerald-300/70">{idx === 0 ? 'Next Bill' : `Month +${idx + 1}`}</span>
+                    </div>
+                    <div className="text-2xl font-black text-white mt-1.5 flex items-center space-x-1.5">
+                      <Zap className="w-4 h-4 text-emerald-400" />
+                      <span>{(Number(item.kwh) || 0).toFixed(1)} kWh</span>
+                    </div>
+                    <div className="text-lg font-bold text-yellow-300 mt-1">
+                      ₹{Math.round(Number(item.inr) || 0).toLocaleString('en-IN')}
+                    </div>
+                    <div className="text-[11px] text-emerald-300/70 mt-1">
+                      Plan: {item.tariff_slab || billPrediction.tariff_slab_applied}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {solarEstimate && (
+                <div className="emerald-subpanel p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-yellow-400/30">
+                  <div className="flex items-center space-x-3">
+                    <Sun className="w-5 h-5 text-yellow-400 shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-bold text-white block">Estimated Rooftop Solar Savings</span>
+                      <span className="text-emerald-300/80">
+                        Save approx. ₹{Math.round(Number(solarEstimate.monthly_savings_inr) || 0).toLocaleString('en-IN')}/mo (₹{Math.round(Number(solarEstimate.annual_savings_inr) || 0).toLocaleString('en-IN')}/yr)
+                      </span>
+                    </div>
+                  </div>
+                  {onNavigate && (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('forecasts')}
+                        className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-xs font-bold text-emerald-200 transition"
+                      >
+                        Future Bills
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('dashboard')}
+                        className="btn-yellow-contrast px-4 py-2 rounded-xl text-xs transition"
+                      >
+                        View Dashboard
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );

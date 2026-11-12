@@ -91,7 +91,18 @@ export default function App() {
           <Dashboard user={user} onNavigate={setActiveTab} />
         )}
         {activeTab === 'bills' && (
-          <BillUpload onBillSaved={() => {}} />
+          <BillUpload
+            onNavigate={setActiveTab}
+            onBillSaved={(savedBill) => {
+              if (!savedBill) return;
+              setUser(prev => ({
+                ...prev,
+                ...(savedBill.provider ? { utility: savedBill.provider } : {}),
+                ...(savedBill.state ? { state: savedBill.state } : {}),
+                ...(savedBill.tariff_category ? { tariff_category: savedBill.tariff_category } : {}),
+              }));
+            }}
+          />
         )}
         {activeTab === 'appliances' && (
           <ApplianceQuestionnaire />

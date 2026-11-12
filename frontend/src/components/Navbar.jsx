@@ -53,7 +53,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
           </div>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center space-x-1.5 p-1.5 rounded-xl bg-[#091a15] border border-emerald-500/20">
+          <nav className="hidden lg:flex items-center space-x-1 p-1 rounded-xl bg-[#091a15] border border-emerald-500/20">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -61,16 +61,16 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`relative flex items-center px-3.5 py-1.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                  className={`relative flex items-center whitespace-nowrap shrink-0 px-3 py-1.5 rounded-lg text-xs xl:text-sm font-bold transition-all duration-200 ${
                     isActive
                       ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 shadow-md shadow-emerald-500/40 font-extrabold'
                       : 'text-emerald-200/75 hover:text-white hover:bg-emerald-900/30'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 mr-1.5 ${isActive ? 'text-slate-950 stroke-[2.5]' : 'text-emerald-400'}`} />
-                  {item.label}
+                  <Icon className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-slate-950 stroke-[2.5]' : 'text-emerald-400'}`} />
+                  <span>{item.label}</span>
                   {item.id === 'eco' && (
-                    <span className="ml-1.5 flex h-2 w-2 relative">
+                    <span className="ml-1.5 flex h-2 w-2 relative shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-400"></span>
                     </span>
@@ -81,9 +81,9 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
           </nav>
 
           {/* User profile & Action */}
-          <div className="flex items-center space-x-3">
-            <div className="hidden sm:flex items-center space-x-2.5 px-3.5 py-1.5 rounded-xl bg-[#091a15] border border-emerald-500/20 text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse"></span>
+          <div className="flex items-center space-x-2.5 shrink-0">
+            <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#091a15] border border-emerald-500/20 text-xs whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse shrink-0"></span>
               <div>
                 <span className="font-bold text-white">{user?.full_name || 'Consumer'}</span>
                 <span className="text-emerald-300/70 ml-1.5">({user?.tariff_category || 'LT-I(A)'})</span>
@@ -93,15 +93,15 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
             <button
               onClick={onLogout}
               title="Sign Out"
-              className="p-2 rounded-xl bg-[#091a15] hover:bg-rose-950/40 text-emerald-300 hover:text-rose-400 border border-emerald-500/20 hover:border-rose-700/50 transition-colors"
+              className="p-2 rounded-xl bg-[#091a15] hover:bg-rose-950/40 text-emerald-300 hover:text-rose-400 border border-emerald-500/20 hover:border-rose-700/50 transition-colors shrink-0"
             >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation Strip */}
-        <div ref={mobileStripRef} className="md:hidden flex overflow-x-auto py-2.5 space-x-1.5 border-t border-emerald-950/80">
+        {/* Compact / Tablet & Mobile Navigation Strip */}
+        <div ref={mobileStripRef} className="lg:hidden flex overflow-x-auto py-2.5 space-x-1.5 border-t border-emerald-950/80">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

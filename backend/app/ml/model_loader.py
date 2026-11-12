@@ -71,12 +71,23 @@ class ModelLoader:
     def get_model(self, name: str) -> Optional[Any]:
         return self._models.get(name)
 
-    def predict_bill_history(self, month: int, year: int, bill_kwh_list: List[float]) -> Dict[str, Any]:
+    MONTH_FACTORS = {
+        1: 0.85, 2: 0.90, 3: 1.05, 4: 1.25, 5: 1.40, 6: 1.35,
+        7: 1.15, 8: 1.10, 9: 1.05, 10: 1.00, 11: 0.88, 12: 0.82
+    }
+
+    def predict_bill_history(
+        self,
+        month: int,
+        year: int,
+        bill_kwh_list: List[float],
+        bill_months: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
         """
         Forecasting with Confidence Tiers:
         - user has >= 12 bills -> model: bill_history_model, tier: HIGH
         - user has 6-11 bills  -> model: bill_history_model, tier: LOW (show disclaimer)
-        - user has < 6 bills   -> no personal model, tier: ESTIMATE (use reference_consumption benchmarks)
+        - user has < 6 bills   -> seasonally adjusted weighted average, tier: ESTIMATE
         """
         n_bills = len(bill_kwh_list)
         
@@ -91,7 +102,9 @@ class ModelLoader:
         else:
             tier = "ESTIMATE"
             confidence_label = "Reference Estimate (<6 Bills)"
-            disclaimer = "Estimate based on Indian residential benchmarks for your city and household size. Upload past bills to unlock personal ML forecasts."
+            disclaimer = "Estimate based on your uploaded bills adjusted for Indian seasonal weather patterns. Upload more bills to unlock full ML accuracy."
+
+        target_factor = self.MONTH_FACTORS.get(month, 1.0)
 
         if n_bills >= 6 and "bill_history_model.joblib" in self._models:
             model = self._models["bill_history_model.joblib"]
@@ -99,20 +112,28 @@ class ModelLoader:
             lag2 = bill_kwh_list[-2]
             lag3 = bill_kwh_list[-3]
             rolling3 = (lag1 + lag2 + lag3) / 3.0
-            pred = model.predict([[month, year, lag1, lag2, lag3, rolling3]])[0]
+            pred = float(model.predict([[month, year, lag1, lag2, lag3, rolling3]])[0])
             model_name = "bill_history_model.joblib"
         elif n_bills > 0:
-            # Weighted average of available bills with seasonal adjustment
-            weights = [1.0 + (0.1 * i) for i in range(n_bills)]
-            pred = sum(b * w for b, w in zip(bill_kwh_list, weights)) / sum(weights)
-            model_name = "weighted_benchmark_model"
+            # De-seasonalize uploaded bills to a neutral baseline, then project to target month's season
+            weights = [1.0 + (0.15 * i) for i in range(n_bills)]
+            if bill_months and len(bill_months) == n_bills:
+                deseasonalized = [
+                    b / max(0.5, self.MONTH_FACTORS.get(m, 1.0))
+                    for b, m in zip(bill_kwh_list, bill_months)
+                ]
+            else:
+                deseasonalized = bill_kwh_list
+            baseline = sum(b * w for b, w in zip(deseasonalized, weights)) / sum(weights)
+            pred = max(20.0, baseline * target_factor)
+            model_name = "seasonal_bill_estimator"
         else:
-            # Default reference consumption for 3-4 person Indian home: ~180-220 kWh
-            pred = 200.0
+            # Default reference consumption scaled by target month seasonality
+            pred = 200.0 * target_factor
             model_name = "reference_consumption_benchmark"
 
         return {
-            "predicted_kwh": round(pred, 1),
+            "predicted_kwh": round(float(pred), 1),
             "confidence_tier": tier,
             "confidence_label": confidence_label,
             "disclaimer": disclaimer,

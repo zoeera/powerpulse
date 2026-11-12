@@ -6,11 +6,15 @@ import {
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { api } from '../api/client';
 
+function safeInt(val, fallback = 0) {
+  const num = Number(val);
+  return Number.isFinite(num) ? Math.round(num) : fallback;
+}
+
 export default function EcoAlternatives() {
   const [panelKw, setPanelKw] = useState(3.0);
   const [batteryKwh, setBatteryKwh] = useState(0.0);
   const [city, setCity] = useState('Hyderabad');
-  const [occupants, setOccupants] = useState(4);
   const [solarRoi, setSolarRoi] = useState(null);
   const [ecoRecs, setEcoRecs] = useState([]);
   const [calculating, setCalculating] = useState(false);
@@ -21,12 +25,12 @@ export default function EcoAlternatives() {
 
   useEffect(() => {
     runSolarCalculation();
-  }, [panelKw, batteryKwh, city, occupants]);
+  }, [panelKw, batteryKwh, city]);
 
   const fetchRecommendations = async () => {
     try {
       const recs = await api.getRecommendations();
-      setEcoRecs(recs.filter(r => r.category !== 'solar') || []);
+      setEcoRecs((recs || []).filter(r => r.category !== 'solar'));
     } catch (e) {
       console.error(e);
     }
@@ -39,7 +43,6 @@ export default function EcoAlternatives() {
         panel_kw: parseFloat(panelKw),
         battery_kwh: parseFloat(batteryKwh),
         city,
-        occupants: parseInt(occupants),
       });
       setSolarRoi(res);
     } catch (e) {
@@ -109,7 +112,7 @@ export default function EcoAlternatives() {
         </div>
 
         {/* Sliders Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 emerald-subpanel p-5 rounded-2xl">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 emerald-subpanel p-5 rounded-2xl">
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <label className="text-xs font-bold text-emerald-200">Solar System Size</label>
@@ -167,27 +170,6 @@ export default function EcoAlternatives() {
               <option value="Delhi">Delhi (NCR)</option>
             </select>
           </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="text-xs font-bold text-emerald-200">Family Members in Home</label>
-              <span className="text-xs font-bold text-yellow-300 bg-yellow-500/20 px-2 py-0.5 rounded border border-yellow-500/30">{occupants} People</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="8"
-              step="1"
-              value={occupants}
-              onChange={(e) => setOccupants(parseInt(e.target.value))}
-              className="w-full accent-yellow-400 cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-emerald-300/60 mt-1">
-              <span>1</span>
-              <span>4</span>
-              <span>8</span>
-            </div>
-          </div>
         </div>
 
         {/* Solar ROI Metrics */}
@@ -196,31 +178,31 @@ export default function EcoAlternatives() {
             <div className="emerald-subpanel p-4 rounded-2xl">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300/70">Expected Monthly Power</span>
               <div className="text-2xl font-black text-white mt-1">
-                {Math.round(solarRoi.monthly_generation_kwh)} <span className="text-sm font-normal text-emerald-300/80">Units</span>
+                {safeInt(solarRoi.monthly_generation_kwh)} <span className="text-sm font-normal text-emerald-300/80">Units</span>
               </div>
-              <span className="text-xs text-emerald-300/60 mt-1 block">~{Math.round(solarRoi.annual_generation_kwh)} Units / year</span>
+              <span className="text-xs text-emerald-300/60 mt-1 block">~{safeInt(solarRoi.annual_generation_kwh)} Units / year</span>
             </div>
 
             <div className="emerald-subpanel p-4 rounded-2xl border-yellow-400/40">
               <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-400">Yearly Savings</span>
               <div className="text-2xl font-black text-yellow-300 mt-1 text-glow-yellow">
-                ₹{Math.round(solarRoi.annual_savings_inr).toLocaleString('en-IN')}
+                ₹{safeInt(solarRoi.annual_savings_inr).toLocaleString('en-IN')}
               </div>
-              <span className="text-xs text-yellow-300/90 mt-1 block">₹{Math.round(solarRoi.monthly_savings_inr).toLocaleString('en-IN')} / month</span>
+              <span className="text-xs text-yellow-300/90 mt-1 block">₹{safeInt(solarRoi.monthly_savings_inr).toLocaleString('en-IN')} / month</span>
             </div>
 
             <div className="emerald-subpanel p-4 rounded-2xl">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300/70">Net Cost (After Subsidy)</span>
               <div className="text-2xl font-black text-white mt-1">
-                ₹{Math.round(solarRoi.net_cost_inr).toLocaleString('en-IN')}
+                ₹{safeInt(solarRoi.net_investment_inr ?? solarRoi.net_cost_inr).toLocaleString('en-IN')}
               </div>
-              <span className="text-xs text-emerald-300/60 mt-1 block">Full Price: ₹{Math.round(solarRoi.estimated_system_cost_inr).toLocaleString('en-IN')}</span>
+              <span className="text-xs text-emerald-300/60 mt-1 block">Full Price: ₹{safeInt(solarRoi.investment_inr ?? solarRoi.estimated_system_cost_inr).toLocaleString('en-IN')}</span>
             </div>
 
             <div className="emerald-subpanel p-4 rounded-2xl border-emerald-400/40">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Pays For Itself In</span>
               <div className="text-2xl font-black text-emerald-300 mt-1">
-                {solarRoi.payback_period_years} <span className="text-sm font-normal text-emerald-300/80">Years</span>
+                {Number(solarRoi.payback_period_years || 0).toFixed(1)} <span className="text-sm font-normal text-emerald-300/80">Years</span>
               </div>
               <span className="text-xs text-emerald-300/90 mt-1 block">Free clean electricity for 20+ years</span>
             </div>
@@ -262,34 +244,37 @@ export default function EcoAlternatives() {
         <p className="text-xs text-emerald-300/70 mb-6">Compare purchase cost vs how much you will save on your electricity bills</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {ecoRecs.map((rec) => (
-            <div key={rec.id || rec.recommendation_type} className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-start mb-3">
-                  <div className="p-2.5 rounded-xl emerald-subpanel">
-                    {getEcoIcon(rec.recommendation_type)}
+          {ecoRecs.map((rec, idx) => {
+            const cat = rec.category || rec.recommendation_type;
+            return (
+              <div key={rec.id || cat || idx} className="card-emerald card-emerald-hover p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="p-2.5 rounded-xl emerald-subpanel">
+                      {getEcoIcon(cat)}
+                    </div>
+                    <span className="text-[11px] font-bold text-yellow-300 bg-yellow-500/20 border border-yellow-500/30 px-2 py-0.5 rounded-md">
+                      Pays off in {Number(rec.payback_period_years || 0).toFixed(1)} yrs
+                    </span>
                   </div>
-                  <span className="text-[11px] font-bold text-yellow-300 bg-yellow-500/20 border border-yellow-500/30 px-2 py-0.5 rounded-md">
-                    Pays off in {rec.payback_period_years} yrs
-                  </span>
+
+                  <h3 className="text-sm font-bold text-white mb-1">{rec.title}</h3>
+                  <p className="text-xs text-emerald-200/80 leading-relaxed mb-4">{rec.description}</p>
                 </div>
 
-                <h3 className="text-sm font-bold text-white mb-1">{rec.title}</h3>
-                <p className="text-xs text-emerald-200/80 leading-relaxed mb-4">{rec.description}</p>
-              </div>
-
-              <div className="border-t border-emerald-900/60 pt-3 space-y-1.5 text-xs">
-                <div className="flex justify-between text-emerald-300/80">
-                  <span>Equipment Price:</span>
-                  <span className="font-semibold text-white">₹{Math.round(rec.estimated_cost_inr).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between text-emerald-300/80">
-                  <span>Yearly Savings:</span>
-                  <span className="font-bold text-yellow-300">₹{Math.round(rec.annual_savings_inr).toLocaleString('en-IN')}/yr</span>
+                <div className="border-t border-emerald-900/60 pt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-emerald-300/80">
+                    <span>Equipment Price:</span>
+                    <span className="font-semibold text-white">₹{safeInt(rec.investment_inr ?? rec.estimated_cost_inr).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-300/80">
+                    <span>Yearly Savings:</span>
+                    <span className="font-bold text-yellow-300">₹{safeInt(rec.annual_savings_inr).toLocaleString('en-IN')}/yr</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

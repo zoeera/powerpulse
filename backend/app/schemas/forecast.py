@@ -9,6 +9,13 @@ class DailyForecastPoint(BaseModel):
     estimated_cost_inr: float
     is_holiday: bool = False
 
+class MonthlyForecastPoint(BaseModel):
+    month: str
+    kwh: float
+    inr: float
+    tariff_slab: Optional[str] = None
+    subsidy_inr: float = 0.0
+
 class ForecastResponse(BaseModel):
     forecast_type: str = Field(..., description="monthly, daily, weekly, bill")
     target_date: date
@@ -22,6 +29,7 @@ class ForecastResponse(BaseModel):
     source_info: str
     as_of_date: date
     daily_breakdown: Optional[List[DailyForecastPoint]] = None
+    forecast_timeline: Optional[List[MonthlyForecastPoint]] = None
     bill_count_used: int = 0
     tariff_slab_applied: Optional[str] = None
     subsidy_applied_inr: float = 0.0
