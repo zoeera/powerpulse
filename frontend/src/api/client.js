@@ -47,7 +47,7 @@ class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    const timeoutMs = isFormData ? 55000 : 35000;
+    const timeoutMs = isFormData ? 90000 : 35000;
     const controller = new AbortController();
     const timerId = setTimeout(() => controller.abort(), timeoutMs);
 

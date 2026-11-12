@@ -79,10 +79,10 @@ def preprocess_image(image_bytes: bytes) -> Image.Image:
     if img.mode != "L":
         img = ImageOps.grayscale(img)
 
-    # Upscale only very small thumbnails; keep Render max dimension <= 1200px for fast CPU OCR
-    max_dim = 1200 if _IS_RENDER else 1600
-    if img.width < 600:
-        scale = 1.8
+    # Upscale only tiny thumbnails; keep Render <= 960px so 0.1 vCPU Tesseract finishes in a few seconds
+    max_dim = 960 if _IS_RENDER else 1600
+    if img.width < 500:
+        scale = 1.6
         img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.BILINEAR)
 
     if max(img.size) > max_dim:
@@ -93,31 +93,31 @@ def preprocess_image(image_bytes: bytes) -> Image.Image:
     return img
 
 
-def _run_tesseract(img: Image.Image, lang: str) -> str:
-    """Run fast single-pass English Tesseract first; only fall back to multi-script if needed."""
+def _run_tesseract(img: Image.Image, lang: str = "hin+eng") -> str:
+    """Run fast single-pass English Tesseract first; only run hin+eng fallback if needed."""
     if pytesseract is None or not _HAS_TESSERACT:
         return ""
 
     config = "--oem 1 --psm 6"
     text = ""
     try:
-        text = pytesseract.image_to_string(img, lang="eng", config=config, timeout=20) or ""
+        text = pytesseract.image_to_string(img, lang="eng", config=config, timeout=15) or ""
     except Exception as e:
         print(f"[OCR] Tesseract eng pass error: {e}")
 
-    # Only pay the multi-language LSTM cost when the bill has very little readable English text
-    if len(text.strip()) < 60 and lang != "eng":
+    # Only load Hindi+English if English extraction yielded almost no readable text
+    if len(text.strip()) < 45 and lang != "eng":
         try:
-            multi_text = pytesseract.image_to_string(img, lang=lang, config=config, timeout=25) or ""
+            multi_text = pytesseract.image_to_string(img, lang="hin+eng", config=config, timeout=18) or ""
             if len(multi_text.strip()) > len(text.strip()):
                 text = multi_text
         except Exception as e:
-            print(f"[OCR] Tesseract multi-lang pass note: {e}")
+            print(f"[OCR] Tesseract hin+eng pass note: {e}")
 
     return text.strip()
 
 
-def run_ocr(image_bytes: bytes, lang: str = "eng+hin+tel") -> str:
+def run_ocr(image_bytes: bytes, lang: str = "hin+eng") -> str:
     """Run OCR using fast Tesseract on Render/Docker or RapidOCR locally."""
     normalized_bytes = _ensure_image_bytes(image_bytes)
     if not normalized_bytes:

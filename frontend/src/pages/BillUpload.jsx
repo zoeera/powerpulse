@@ -316,7 +316,7 @@ export default function BillUpload({ onBillSaved, onNavigate, embedded = false }
                 {uploading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Reading your bill...</span>
+                    <span>Reading your bill... (may take ~20s if server is waking up)</span>
                   </>
                 ) : (
                   <>
