@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: powerpulse_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-powerpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-powerpulse_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-powerpulse_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-powerpulse} -d ${POSTGRES_DB:-powerpulse_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: powerpulse_redis
+    restart: always
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: powerpulse_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-powerpulse}:${POSTGRES_PASSWORD:-powerpulse_secret}@db:5432/${POSTGRES_DB:-powerpulse_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-powerpulse_super_secret_jwt_key_change_in_prod_1234567890}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - STORAGE_PATH=/app/storage
+      - STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET:-storage_signing_key_secret_powerpulse}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: powerpulse_celery_worker
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-powerpulse}:${POSTGRES_PASSWORD:-powerpulse_secret}@db:5432/${POSTGRES_DB:-powerpulse_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - STORAGE_PATH=/app/storage
+    volumes:
+      - ./backend:/app
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app.celery_app worker --loglevel=info -c 2
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: powerpulse_celery_beat
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-powerpulse}:${POSTGRES_PASSWORD:-powerpulse_secret}@db:5432/${POSTGRES_DB:-powerpulse_db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - STORAGE_PATH=/app/storage
+    volumes:
+      - ./backend:/app
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: powerpulse_frontend
+    restart: always
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+

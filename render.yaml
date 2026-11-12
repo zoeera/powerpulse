@@ -1,0 +1,32 @@
+services:
+  # FastAPI + RapidOCR + ML Forecasting Backend
+  - type: web
+    name: powerpulse-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: STORAGE_SIGNING_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///./powerpulse.db
+      - key: STORAGE_PATH
+        value: /tmp/powerpulse_storage
+
+  # React + Vite Frontend Static Site
+  - type: web
+    name: powerpulse-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false

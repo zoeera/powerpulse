@@ -1,0 +1,32 @@
+# Python virtual environments & caches
+venv/
+.venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node & Frontend build outputs
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Environment files & secrets
+.env
+backend/.env
+frontend/.env
+
+# Local databases & uploaded user files
+*.db
+*.sqlite
+*.sqlite3
+backend/powerpulse.db
+storage/
+backend/storage/
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
